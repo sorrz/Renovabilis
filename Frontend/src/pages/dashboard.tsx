@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Container,
   Typography,
@@ -20,11 +20,22 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
-const areas = ['SE1', 'SE2', 'SE3', 'SE4'];
-const timeRanges = ['24h', '1W', '1M'];
+// Typdefinitioner
+type Area = 'SE1' | 'SE2' | 'SE3' | 'SE4';
+type TimeRange = '24h' | '1W' | '1M';
 
-//Data per område & tidsintervall
-const allData = {
+type DataPoint = {
+  time: string;
+  forecast: number;
+  actual: number;
+};
+
+type AreaData = {
+  [key in TimeRange]: DataPoint[];
+};
+
+// Statisk data
+const allData: Record<Area, AreaData> = {
   SE1: {
     '24h': [
       { time: '00:00', forecast: 10, actual: 9 },
@@ -121,17 +132,18 @@ const allData = {
 
 export default function Dashboard() {
   const [count, setCount] = useState(0);
-  const [selectedArea, setSelectedArea] = useState('SE1');
-  const [selectedTime, setSelectedTime] = useState('24h');
+  const [selectedArea, setSelectedArea] = useState<Area>('SE1');
+  const [selectedTime, setSelectedTime] = useState<TimeRange>('24h');
 
-  const [tempArea, setTempArea] = useState(selectedArea);
-  const [tempTime, setTempTime] = useState(selectedTime);
+  const [tempArea, setTempArea] = useState<Area>(selectedArea);
+  const [tempTime, setTempTime] = useState<TimeRange>(selectedTime);
 
-  const [chartData, setChartData] = useState(
-    allData[selectedArea][selectedTime]);
+  const [chartData, setChartData] = useState<DataPoint[]>(
+    allData[selectedArea]?.[selectedTime] || []
+  );
 
   useEffect(() => {
-    setChartData(allData[selectedArea] [selectedTime] || []);
+    setChartData(allData[selectedArea]?.[selectedTime] || []);
   }, [selectedArea, selectedTime]);
 
   return (
@@ -148,9 +160,7 @@ export default function Dashboard() {
             sx={{
               color: 'white',
               top: '-6px',
-              '&.Mui-focused': {
-                color: 'white',
-              },
+              '&.Mui-focused': { color: 'white' },
             }}
           >
             Område
@@ -159,9 +169,7 @@ export default function Dashboard() {
             labelId="area-label"
             id="area-select"
             value={tempArea}
-            label="Område"
-            size="small"
-            onChange={(e) => setTempArea(e.target.value)}
+            onChange={(e) => setTempArea(e.target.value as Area)}
             sx={{
               minWidth: 100,
               backgroundColor: '#1976d2',
@@ -169,7 +177,7 @@ export default function Dashboard() {
               '& .MuiSvgIcon-root': { color: 'white' },
             }}
           >
-            {areas.map((area) => (
+            {(['SE1', 'SE2', 'SE3', 'SE4'] as Area[]).map((area) => (
               <MenuItem key={area} value={area}>
                 {area}
               </MenuItem>
@@ -184,9 +192,7 @@ export default function Dashboard() {
             sx={{
               color: 'white',
               top: '-6px',
-              '&.Mui-focused': {
-                color: 'white',
-              },
+              '&.Mui-focused': { color: 'white' },
             }}
           >
             Tidsintervall
@@ -195,9 +201,7 @@ export default function Dashboard() {
             labelId="time-label"
             id="time-select"
             value={tempTime}
-            label="Tidsintervall"
-            size="small"
-            onChange={(e) => setTempTime(e.target.value)}
+            onChange={(e) => setTempTime(e.target.value as TimeRange)}
             sx={{
               minWidth: 120,
               backgroundColor: '#1976d2',
@@ -205,7 +209,7 @@ export default function Dashboard() {
               '& .MuiSvgIcon-root': { color: 'white' },
             }}
           >
-            {timeRanges.map((time) => (
+            {(['24h', '1W', '1M'] as TimeRange[]).map((time) => (
               <MenuItem key={time} value={time}>
                 {time}
               </MenuItem>
@@ -222,9 +226,7 @@ export default function Dashboard() {
           sx={{
             color: '#1976d2',
             borderColor: '#1976d2',
-            '&:hover': {
-              color: 'white',
-            },
+            '&:hover': { color: 'white' },
           }}
         >
           Apply
@@ -237,45 +239,37 @@ export default function Dashboard() {
 
       <Typography>Counter: {count}</Typography>
 
-      <Stack direction="row" spacing={2} sx={{ mt: 2, mb: 4, justifyContent: 'center' }} justifyContent="center">
+      <Stack direction="row" spacing={2} sx={{ mt: 2, mb: 4, justifyContent: 'center' }}>
         <Button variant="contained" onClick={() => setCount(count + 1)}>
           Increment
         </Button>
         <Button variant="contained" onClick={() => setCount(count - 1)}>
           Decrement
         </Button>
-        <Button variant="outlined" onClick={() => setCount(0)}      sx={{
+        <Button
+          variant="outlined"
+          onClick={() => setCount(0)}
+          sx={{
             color: '#1976d2',
             borderColor: '#1976d2',
-            '&:hover': {
-              color: 'white',
-            },
-          }}>
+            '&:hover': { color: 'white' },
+          }}
+        >
           Reset
         </Button>
       </Stack>
 
       <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={chartData} style={{ backgroundColor: 'rgb(255, 255, 255)'}}>
+        <LineChart data={chartData} style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="time" />
           <YAxis />
           <Tooltip />
-          <Line
-            type="monotone"
-            dataKey="forecast"
-            stroke="#8884d8"
-            activeDot={{ r: 8 }}
-            name="Prognos"
-          />
-          <Line
-            type="monotone"
-            dataKey="actual"
-            stroke="#82ca9d"
-            name="Verklighet"
-          />
+          <Line type="monotone" dataKey="forecast" stroke="#8884d8" activeDot={{ r: 8 }} name="Prognos" />
+          <Line type="monotone" dataKey="actual" stroke="#82ca9d" name="Verklighet" />
         </LineChart>
       </ResponsiveContainer>
     </Container>
   );
 }
+
