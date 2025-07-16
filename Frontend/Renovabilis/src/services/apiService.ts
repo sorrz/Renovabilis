@@ -1,43 +1,23 @@
 // API Service för att hämta data från backend
 const API_BASE_URL = 'http://localhost:5054/api';
 
-export interface EnergyData {
+export interface RenovaBill {
   id: number;
-  gridArea: string;
-  areaName: string;
-  timestamp: string;
-  weatherData: {
-    temperature: number;
-    windSpeed: number;
-    cloudCover: number;
-    humidity: number;
-  };
-  energyProduction: {
-    wind: number;
-    solar: number;
-    hydro: number;
-    total: number;
-  };
-  energyConsumption: {
-    residential: number;
-    industrial: number;
-    commercial: number;
-    total: number;
-  };
-  pricePerMWh: number;
+  amount: number;
+  dueDate: string;
 }
 
 export const apiService = {
-  async getEnergyData(): Promise<EnergyData[]> {
+  getAllBills: async (): Promise<RenovaBill[]> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/renovabills/energy-data`);
+      const response = await fetch(`${API_BASE_URL}/renovabills`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       return await response.json();
     } catch (error) {
-      console.error('Error fetching energy data:', error);
-      throw error;
+      console.error('Error fetching bills:', error);
+      return [];
     }
   }
 };
