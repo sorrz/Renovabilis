@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Polygon, Popup, CircleMarker } from 'react-leaflet';
-import { Box, Paper, Typography, Card, CardContent, Chip, Grid, Container } from '@mui/material';
+import { Box, Paper, Typography, Card, CardContent, Chip, Container } from '@mui/material';
+import { Grid } from '@mui/material';
 import 'leaflet/dist/leaflet.css';
 
 interface PriceData {

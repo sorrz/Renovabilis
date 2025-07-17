@@ -17,7 +17,7 @@ namespace RenovaBills.API.Controllers
         }
 
 
-        [HttpGet]
+        [HttpGet("energydata")]
         public async Task<ActionResult<IEnumerable<EnergyData>>> GetEnergyData()
         {
             var energyData = await _energyDataRepository.GetAllAsync();
