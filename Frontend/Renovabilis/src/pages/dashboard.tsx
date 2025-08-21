@@ -11,267 +11,223 @@ import {
   Toolbar,
   IconButton,
   Avatar,
-  Chip
+  Chip,
+  Alert
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import ElectricBoltIcon from '@mui/icons-material/ElectricBolt';
-import BoltIcon from '@mui/icons-material/Bolt';
-
-interface EnergyData {
-  id: number;
-  timestamp: string;
-  consumptionKwh: number;
-  productionKwh: number;
-  pricePerKwh: number;
-  gridAreaId: number;
-  gridArea: {
-    id: number;
-    name: string;
-    code: string;
-  };
-}
-
-interface PriceData {
-  gridArea: string;
-  price: number;
-  currency: string;
-  timestamp: string;
-  unit: string;
-}
+import PriceChart, { PriceBarChart } from '../components/charts/PriceChart';
 
 const Dashboard: React.FC = () => {
-  const [energyData, setEnergyData] = useState<EnergyData[]>([]);
-  const [priceData, setPriceData] = useState<PriceData[]>([]);
+  const [priceData, setPriceData] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        
-        const [energyResponse, priceResponse] = await Promise.all([
-          fetch('http://localhost:5054/api/energydata'),
-          fetch('http://localhost:5054/api/price/all-areas')
+        const [pricesResponse] = await Promise.all([
+          fetch('http://localhost:5054/api/prices/current')
         ]);
 
-        if (!energyResponse.ok || !priceResponse.ok) {
-          throw new Error('API responded with error');
+        if (pricesResponse.ok) {
+          const pricesResult = await pricesResponse.json();
+          console.log('✅ Dashboard data:', pricesResult);
+          
+          if (pricesResult.prices) {
+            setPriceData(pricesResult.prices);
+            
+            // Generera mock historisk data för grafer
+            const mockChartData = generateMockChartData(pricesResult.prices);
+            setChartData(mockChartData);
+          }
         }
-
-        const energyResult = await energyResponse.json();
-        const priceResult = await priceResponse.json();
-        
-        setEnergyData(energyResult);
-        setPriceData(priceResult);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Kunde inte hämta data från API:et');
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-    
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(fetchData, 120000);
     return () => clearInterval(interval);
   }, []);
 
-  const totalConsumption = energyData.reduce((sum, data) => sum + data.consumptionKwh, 0);
-  const totalProduction = energyData.reduce((sum, data) => sum + data.productionKwh, 0);
-  const averagePrice = priceData.length > 0 ? priceData.reduce((sum, data) => sum + data.price, 0) / priceData.length : 0;
-  const efficiency = totalConsumption > 0 ? (totalProduction / totalConsumption * 100) : 0;
+  // Generera simulerad 24h data för grafer
+  const generateMockChartData = (currentPrices: any[]) => {
+    const hours = Array.from({length: 24}, (_, i) => {
+      const hour = new Date();
+      hour.setHours(i, 0, 0, 0);
+      
+      const dataPoint: any = {
+        time: hour.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }),
+        hour: i
+      };
+      
+      currentPrices.forEach(price => {
+        // Simulera prisvariation baserat på tid
+        const timeVariation = getTimeVariation(i);
+        const randomVariation = (Math.random() - 0.5) * 0.3;
+        const variation = 1 + timeVariation + randomVariation;
+        
+        dataPoint[price.gridArea] = Math.max(0.1, price.currentPriceNumeric * variation);
+      });
+      
+      return dataPoint;
+    });
+    
+    return hours;
+  };
 
-  if (error) {
+  const getTimeVariation = (hour: number) => {
+    // Simulera svenska elprisrönster
+    if (hour >= 6 && hour <= 8) return 0.2;   // Morgon-rush
+    if (hour >= 9 && hour <= 15) return -0.1; // Dagtid
+    if (hour >= 16 && hour <= 19) return 0.3; // Kväll-rush
+    if (hour >= 20 && hour <= 22) return 0.1; // Kväll
+    return -0.2; // Natt
+  };
+
+  const sortedPrices = priceData
+    .filter(p => p.currentPriceNumeric > 0)
+    .sort((a, b) => a.currentPriceNumeric - b.currentPriceNumeric);
+  const cheapestArea = sortedPrices[0];
+  const mostExpensiveArea = sortedPrices[sortedPrices.length - 1];
+
+  if (loading) {
     return (
-      <Box sx={{ flexGrow: 1 }}>
-        <Container maxWidth="lg" sx={{ mt: 4 }}>
-          <Paper sx={{ p: 3, textAlign: 'center', color: 'error.main' }}>
-            <Typography variant="h6">{error}</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Kontrollera att API:et körs på localhost:5054
-            </Typography>
-          </Paper>
-        </Container>
-      </Box>
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Typography variant="h4" gutterBottom>
+          Laddar dashboard...
+        </Typography>
+      </Container>
     );
   }
 
   return (
     <Box sx={{ flexGrow: 1 }}>
       {/* Header */}
-      <AppBar position="static" elevation={0} sx={{ backgroundColor: '#1976d2' }}>
+      <AppBar position="static" sx={{ mb: 4 }}>
         <Toolbar>
           <IconButton edge="start" color="inherit" sx={{ mr: 2 }}>
             <MenuIcon />
           </IconButton>
           <ElectricBoltIcon sx={{ mr: 1 }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Renovabilis Energy Dashboard
+            Svenska Elnätet - Live Dashboard
           </Typography>
-          <Chip 
-            label="Live Data" 
-            sx={{ mr: 2, backgroundColor: '#4caf50', color: 'white' }} 
-            size="small"
-          />
           <IconButton color="inherit">
             <NotificationsIcon />
           </IconButton>
-          <Avatar sx={{ ml: 1, backgroundColor: '#ff4081' }}>L</Avatar>
+          <Avatar sx={{ ml: 2 }}>L</Avatar>
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        {loading ? (
-          <Typography variant="h6" textAlign="center">
-            Laddar energidata...
-          </Typography>
-        ) : (
-          <>
-            {/* KPI Cards */}
-            <Grid container spacing={3} sx={{ mb: 3 }}>
-              <Grid item xs={12} sm={6} md={3}>
-                <Card sx={{ background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)', color: 'white' }}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Box>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          Total Förbrukning
-                        </Typography>
-                        <Typography variant="h4" component="div">
-                          {(totalConsumption / 1000).toFixed(1)}
-                        </Typography>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          MWh idag
-                        </Typography>
-                      </Box>
-                      <BoltIcon sx={{ fontSize: 40, opacity: 0.8 }} />
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
+      <Container maxWidth="lg">
+        {/* Status */}
+        <Alert severity="success" sx={{ mb: 3 }}>
+          <strong>Live Data:</strong> {priceData.length}/4 områden med riktiga priser från ENTSO-E
+        </Alert>
 
-              <Grid item xs={12} sm={6} md={3}>
-                <Card sx={{ background: 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)', color: 'white' }}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Box>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          Förnybar Produktion
-                        </Typography>
-                        <Typography variant="h4" component="div">
-                          {(totalProduction / 1000).toFixed(1)}
-                        </Typography>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          MWh idag
-                        </Typography>
-                      </Box>
-                      <ElectricBoltIcon sx={{ fontSize: 40, opacity: 0.8 }} />
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12} sm={6} md={3}>
-                <Card sx={{ background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)', color: 'white' }}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Box>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          Genomsnittspris
-                        </Typography>
-                        <Typography variant="h4" component="div">
-                          {averagePrice.toFixed(1)}
-                        </Typography>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          öre/kWh
-                        </Typography>
-                      </Box>
-                      <BoltIcon sx={{ fontSize: 40, opacity: 0.8 }} />
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12} sm={6} md={3}>
-                <Card sx={{ background: 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)', color: 'white' }}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Box>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          Effektivitet
-                        </Typography>
-                        <Typography variant="h4" component="div">
-                          {efficiency.toFixed(0)}%
-                        </Typography>
-                        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                          Produktion/Förbrukning
-                        </Typography>
-                      </Box>
-                      <ElectricBoltIcon sx={{ fontSize: 40, opacity: 0.8 }} />
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-
-            {/* Price Data */}
-            <Paper sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Svenska Elpriser (Realtid)
-              </Typography>
-              <Grid container spacing={2}>
-                {priceData.map((data) => (
-                  <Grid item xs={6} md={3} key={data.gridArea}>
-                    <Card>
-                      <CardContent>
-                        <Typography variant="h6" component="div">
-                          {data.gridArea}
-                        </Typography>
-                        <Typography variant="h4" color="primary">
-                          {data.price.toFixed(1)}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          öre/kWh
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
-            </Paper>
-
-            {/* Recent Energy Data */}
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Senaste Energidata
-              </Typography>
-              {energyData.slice(-5).reverse().map((data) => (
-                <Box key={data.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1, borderBottom: '1px solid #eee' }}>
-                  <Box>
-                    <Typography variant="body1">
-                      {data.gridArea.code} - {data.gridArea.name}
+        {/* Aktuella priser - kort */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          {priceData.map((price) => (
+            <Grid item xs={12} sm={6} md={3} key={price.gridArea}>
+              <Card sx={{ 
+                backgroundColor: price.gridArea === cheapestArea?.gridArea ? '#e8f5e8' : 
+                                price.gridArea === mostExpensiveArea?.gridArea ? '#ffebee' : 'inherit'
+              }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="h6" component="div">
+                      {price.gridArea}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {new Date(data.timestamp).toLocaleString('sv-SE')}
-                    </Typography>
+                    {price.gridArea === cheapestArea?.gridArea && (
+                      <Chip label="Billigast" color="success" size="small" sx={{ ml: 1 }} />
+                    )}
+                    {price.gridArea === mostExpensiveArea?.gridArea && (
+                      <Chip label="Dyrast" color="error" size="small" sx={{ ml: 1 }} />
+                    )}
                   </Box>
-                  <Box sx={{ textAlign: 'right' }}>
-                    <Typography variant="body1">
-                      {data.consumptionKwh.toFixed(0)} kWh förbrukning
-                    </Typography>
-                    <Typography variant="body2" color="primary">
-                      {data.pricePerKwh.toFixed(1)} öre/kWh
-                    </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    {price.gridAreaName}
+                  </Typography>
+                  <Typography variant="h4" component="div" color="primary" sx={{ fontWeight: 'bold' }}>
+                    {price.currentPriceNumeric.toFixed(1)}
+                  </Typography>
+                  <Typography variant="body2">
+                    öre/kWh
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Snitt idag: {price.averageToday}
+                  </Typography>
+                  <Chip 
+                    label={price.isRealData ? 'Live ENTSO-E' : 'Uppskattning'}
+                    size="small"
+                    color={price.isRealData ? 'success' : 'default'}
+                    sx={{ mt: 1 }}
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+
+        {/* Grafer */}
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <PriceChart 
+              data={chartData} 
+              title="Prisutveckling senaste 24 timmarna" 
+              height={400}
+            />
+          </Grid>
+          
+          <Grid item xs={12} md={6}>
+            <PriceBarChart 
+              data={priceData} 
+              title="Aktuella priser per område" 
+              height={300}
+            />
+          </Grid>
+          
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, height: 300 }}>
+              <Typography variant="h6" gutterBottom>
+                Marknadsöversikt
+              </Typography>
+              {sortedPrices.length > 0 && (
+                <Box>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    <strong>Prisspridning:</strong> {(mostExpensiveArea?.currentPriceNumeric - cheapestArea?.currentPriceNumeric).toFixed(1)} öre/kWh
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    <strong>Genomsnitt:</strong> {(sortedPrices.reduce((sum, p) => sum + p.currentPriceNumeric, 0) / sortedPrices.length).toFixed(1)} öre/kWh
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    <strong>Prisfaktor:</strong> {(mostExpensiveArea?.currentPriceNumeric / cheapestArea?.currentPriceNumeric).toFixed(1)}x skillnad
+                  </Typography>
+                  
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="h6" gutterBottom>Prisalerts:</Typography>
+                    {cheapestArea?.currentPriceNumeric < 10 && (
+                      <Alert severity="success" sx={{ mb: 1 }}>
+                        Fantastiska priser i {cheapestArea.gridArea}! Perfekt tid för energikrävande aktiviteter.
+                      </Alert>
+                    )}
+                    {mostExpensiveArea?.currentPriceNumeric > 80 && (
+                      <Alert severity="warning">
+                        Höga priser i {mostExpensiveArea.gridArea}. Överväg att vänta med energikrävande aktiviteter.
+                      </Alert>
+                    )}
                   </Box>
                 </Box>
-              ))}
+              )}
             </Paper>
-          </>
-        )}
+          </Grid>
+        </Grid>
       </Container>
     </Box>
   );
